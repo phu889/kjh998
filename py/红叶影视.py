@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-# ============ 红叶影院 hyyycn.cc 源 v1.0 ============
+# ============ 红叶影院 hyyycn.cc 源 v1.1 ============
 # 基于71us模板v7.5套写 | 2026-09-13
+# v1.1 修复: 分类翻页pagecount恒=1(漏配conch /vodtype/{tid}-{n}.html 数字翻页), 新增vodtype/vodshow双匹配+尾页兜底
 # 站点: https://www.hyyycn.cc | 苹果CMS + conch模板
 # 路由: 首页(hl-list-item) /vodtype/{tid}{-页}.html(分类) /voddetail/{id}.html(详情)
 #       /vodplay/{id}-{线路}-{集}.html(播放) /vodsearch/{词}-------------.html(搜索,7结果实测)
@@ -230,14 +231,32 @@ class Spider(Spider):
 
     def _pagecount(self, h, cur=1):
         mx = cur
-        for m in re.finditer(r"/(?:vodshow|s|wfmwusw)/\d+[^\"']*?(\d+)(?:---|-)\.html|page=(\d+)", h):
+        # conch数字翻页: /vodtype/{tid}-{n}.html (红叶影院实测翻页结构, 原正则漏配导致无下一页)
+        for m in re.finditer(r'/vodtype/\d+-(\d+)\.html', h):
+            try:
+                n = int(m.group(1))
+                if n > mx:
+                    mx = n
+            except:
+                pass
+        # vodshow筛选翻页: /vodshow/{tid}-...-{n}---.html
+        for m in re.finditer(r'/vodshow/[^"\']*?-(\d+)---\.html', h):
+            try:
+                n = int(m.group(1))
+                if n > mx:
+                    mx = n
+            except:
+                pass
+        # 旧模板兼容: /s/{tid}... /wfmwusw/... / page=参数
+        for m in re.finditer(r"/(?:s|wfmwusw)/\d+[^\"']*?(\d+)(?:---|-)\.html|page=(\d+)", h):
             try:
                 n = int(m.group(1) or m.group(2))
                 if n > mx:
                     mx = n
             except:
                 pass
-        if re.search(r'下一页|class="[^"]*next[^"]*"', h):
+        # 下一页兜底: 仅当下一页带真实链接时才+1(避免末页"尾页"纯文本按钮误判)
+        if re.search(r'<a[^>]+href="[^"]+"[^>]*>[^<]{0,6}下一页', h) or re.search(r'hl-page-next[^>]*href=|href="[^"]*"[^>]*class="[^"]*next', h):
             mx = max(mx, cur + 1)
         return mx
 
